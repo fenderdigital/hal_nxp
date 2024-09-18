@@ -49,6 +49,7 @@ typedef enum _ARM_TIMER_TYPE {
 
 __STATIC_INLINE void ARM_TIMER_Initialize(ARM_TIMER_type_t timer)
 {
+    (void)timer;
 }
 
 __STATIC_INLINE void ARM_TIMER_GetFreq(uint32_t *pVal)
