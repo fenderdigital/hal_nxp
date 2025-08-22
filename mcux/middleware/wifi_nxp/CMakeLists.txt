@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2022-2024 NXP
 
+# define part number for this driver
+
 # Legacy MCUX SDK code is in mcux/mcux-sdk.
 # MCUX SDK NG code is in mcux/mcux-sdk-ng.
 # Use the right code by checking whether the platform is not supported by MCUX SDK NG.
@@ -9,8 +11,6 @@ if(DEFINED CONFIG_SOC_SDKNG_UNSUPPORTED)
 else()
     set(MCUX_SDK_DIR ${ZEPHYR_HAL_NXP_MODULE_DIR}/mcux/mcux-sdk-ng)
 endif()
-
-# define part number for this driver
 
 zephyr_compile_definitions_ifdef(CONFIG_NXP_88W8987
     SD8987
@@ -28,9 +28,15 @@ zephyr_compile_definitions_ifdef(CONFIG_NXP_88W8801
     SD8801
 )
 
+zephyr_compile_definitions_ifdef(CONFIG_NXP_IW610
+    IW610
+)
+
 zephyr_compile_definitions_ifdef(CONFIG_NXP_RW610
     RW610
     WIFI_BT_TX_PWR_LIMITS="wlan_txpwrlimit_cfg_WW_rw610.h"
+    CONFIG_NXP_WIFI_ED_OFFSET_2G=0x08
+    CONFIG_NXP_WIFI_ED_OFFSET_5G=0x08
 )
 
 zephyr_compile_definitions_ifdef(CONFIG_NXP_88W8987_AW_CM358_USD
@@ -181,6 +187,20 @@ zephyr_compile_definitions_ifdef(CONFIG_NXP_88W8801_MURATA_2DS_M2
     CONFIG_NXP_WIFI_ED_OFFSET_2G=0x0E
 )
 
+zephyr_compile_definitions_ifdef(CONFIG_NXP_IW610_MURATA_2LL_M2
+    WIFI_BT_TX_PWR_LIMITS="wlan_txpwrlimit_cfg_murata_2LL.h"
+    CONFIG_NXP_WIFI_ED_OFFSET_2G=0x0A
+    CONFIG_NXP_WIFI_ED_OFFSET_5G=0x0A
+    WIFI_BT_USE_M2_INTERFACE
+)
+
+zephyr_compile_definitions_ifdef(CONFIG_NXP_IW610_RD_USD
+    WIFI_BT_TX_PWR_LIMITS="wlan_txpwrlimit_cfg_murata_2LL.h"
+    CONFIG_NXP_WIFI_ED_OFFSET_2G=0x0A
+    CONFIG_NXP_WIFI_ED_OFFSET_5G=0x0A
+    WIFI_BT_USE_USD_INTERFACE
+)
+
 zephyr_compile_definitions_ifdef(CONFIG_NXP_WIFI_BT_USE_USD_INTERFACE
     WIFI_BT_USE_USD_INTERFACE
 )
@@ -195,7 +215,7 @@ zephyr_library_compile_definitions(
     CONFIG_OSA_DEBUG_ASSERT_ENABLED=1
 )
 
-# mcux-sdk and mcux-sdk-ng shar the wifi_nxp, the lists and osa is
+# mcux-sdk and mcux-sdk-ng share the wifi_nxp, the lists and osa is
 # included in another way. Need add condition here.
 if(DEFINED CONFIG_SOC_SDKNG_UNSUPPORTED)
   zephyr_library_sources(${ZEPHYR_HAL_NXP_MODULE_DIR}/mcux/mcux-sdk/utilities/misc_utilities/fsl_memcpy.S)
@@ -225,6 +245,7 @@ zephyr_include_directories(
     wifi_bt_firmware/IW416
     wifi_bt_firmware/nw61x
     wifi_bt_firmware/8801
+    wifi_bt_firmware/iw610
     cli
     ${MCUX_SDK_DIR}/components/osa/
     ${MCUX_SDK_DIR}/components/lists/
@@ -300,8 +321,10 @@ if(CONFIG_SPEED_OPTIMIZATIONS OR CONFIG_SIZE_OPTIMIZATIONS)
 
 if(CONFIG_NXP_RW610)
 	set(QUICK_ACCESS_CODE_AREA RAM_TEXT)
+	set(QUICK_ACCESS_CODE_AREA_2 RAM_TEXT)
 else()
 	set(QUICK_ACCESS_CODE_AREA ITCM_TEXT)
+	set(QUICK_ACCESS_CODE_AREA_2 DTCM_TEXT)
 endif()
 
 # critical path code relocated to SRAM
@@ -314,13 +337,19 @@ zephyr_code_relocate(FILES
                      wifidriver/mlan_11n_rxreorder.c
                      wifidriver/mlan_wmm.c
                      wifidriver/wifi.c
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 
 if(CONFIG_SDIO_STACK)
 zephyr_code_relocate(FILES
                      sdio_nxp_abs/mlan_sdio.c
                      wifidriver/wifi-sdio.c
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     wifidriver/sdio.c
+                     ${ZEPHYR_BASE}/subsys/sd/sdio.c
+                     LOCATION ${QUICK_ACCESS_CODE_AREA_2} NOKEEP)
+
+zephyr_code_relocate(FILES ${ZEPHYR_BASE}/drivers/wifi/nxp/nxp_wifi_drv.c
+                     FILTER ".*\\.nxp_wifi_send|.*\\.nxp_wifi_recv"
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 endif()
 
 if(CONFIG_NXP_RW610)
@@ -328,39 +357,39 @@ zephyr_code_relocate(FILES
                      wifidriver/wifi-imu.c
                      ${MCUX_SDK_DIR}/drivers/imu/fsl_imu.c
                      ${MCUX_SDK_DIR}/components/imu_adapter/fsl_adapter_imu.c
-                     LOCATION RAM_TEXT)
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 endif()
 
 zephyr_code_relocate(FILES
                      ${MCUX_SDK_DIR}/components/osa/fsl_os_abstraction_zephyr.c
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 
 if(DEFINED CONFIG_SOC_SDKNG_UNSUPPORTED)
 zephyr_code_relocate(FILES
                      ${ZEPHYR_HAL_NXP_MODULE_DIR}/mcux/mcux-sdk/utilities/misc_utilities/fsl_memcpy.S
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 else()
 zephyr_code_relocate(FILES
                      ${ZEPHYR_HAL_NXP_MODULE_DIR}/mcux/mcux-sdk-ng/components/misc_utilities/fsl_memcpy.S
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 endif()
 
 file(GLOB ZPERF_SRC ${ZEPHYR_BASE}/subsys/net/lib/zperf/*.c)
-zephyr_code_relocate(FILES ${ZPERF_SRC} LOCATION RAM_TEXT)
+zephyr_code_relocate(FILES ${ZPERF_SRC} LOCATION ${QUICK_ACCESS_CODE_AREA_2} NOKEEP)
+
+zephyr_code_relocate(FILES
+                     ${ZEPHYR_BASE}/subsys/net/ip/ipv6_fragment.c
+                     ${ZEPHYR_BASE}/subsys/net/ip/ipv4_fragment.c
+                     LOCATION RAM_TEXT NOKEEP)
 
 zephyr_code_relocate(FILES
                      ${ZEPHYR_BASE}/subsys/net/ip/connection.c
-                     ${ZEPHYR_BASE}/subsys/net/ip/ipv6.c
-                     ${ZEPHYR_BASE}/subsys/net/ip/ipv6_fragment.c
                      ${ZEPHYR_BASE}/subsys/net/ip/packet_socket.c
                      ${ZEPHYR_BASE}/subsys/net/ip/utils.c
-                     LOCATION RAM_TEXT)
-
-zephyr_code_relocate(FILES
                      ${ZEPHYR_BASE}/subsys/net/lib/sockets/sockets_packet.c
                      ${ZEPHYR_BASE}/subsys/net/lib/sockets/sockets.c
                      ${ZEPHYR_BASE}/subsys/net/ip/ipv4.c
-                     ${ZEPHYR_BASE}/subsys/net/ip/ipv4_fragment.c
+                     ${ZEPHYR_BASE}/subsys/net/ip/ipv6.c
                      ${ZEPHYR_BASE}/subsys/net/ip/net_context.c
                      ${ZEPHYR_BASE}/subsys/net/ip/net_core.c
                      ${ZEPHYR_BASE}/subsys/net/ip/net_if.c
@@ -370,7 +399,7 @@ zephyr_code_relocate(FILES
                      ${ZEPHYR_BASE}/subsys/net/ip/udp.c
                      ${ZEPHYR_BASE}/subsys/net/l2/ethernet/ethernet.c
                      ${ZEPHYR_BASE}/lib/net_buf/buf.c
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 
 zephyr_code_relocate(FILES
                      ${ZEPHYR_BASE}/kernel/mem_slab.c
@@ -382,7 +411,7 @@ zephyr_code_relocate(FILES
                      ${ZEPHYR_BASE}/kernel/sem.c
                      ${ZEPHYR_BASE}/kernel/thread.c
                      ${ZEPHYR_BASE}/kernel/work.c
-                     LOCATION ${QUICK_ACCESS_CODE_AREA})
+                     LOCATION ${QUICK_ACCESS_CODE_AREA} NOKEEP)
 endif()
 endif()
 

@@ -455,6 +455,20 @@ static void process_data_packet(const t_u8 *rcvdata, const t_u16 datalen)
             deliver_packet_above(p, recv_interface);
             break;
         default:
+#if CONFIG_NET_MONITOR
+            /* If rx_pkt_type is 802.11, and in monitor mode, deliver data to user */
+            if ((rxpd->rx_pkt_type == PKT_TYPE_802DOT11) && (true == get_monitor_flag()))
+            {
+                wifi_frame_t *frame = (wifi_frame_t *)payload;
+
+                if (frame->frame_type == BEACON_FRAME || frame->frame_type == DATA_FRAME ||
+                    frame->frame_type == AUTH_FRAME || frame->frame_type == PROBE_REQ_FRAME ||
+                    frame->frame_type == QOS_DATA_FRAME)
+                {
+                    user_recv_monitor_data(rcvdata);
+                }
+            }
+#endif
             /* fixme: avoid pbuf allocation in this case */
 
             (void)net_pkt_unref(p);
@@ -505,10 +519,8 @@ bool wrapper_net_is_ip_or_ipv6(const t_u8 *buffer)
 }
 
 extern int retry_attempts;
-#if CONFIG_WIFI_PKT_FWD
 #define MAX_RETRY_PKT_FWD 3
-#endif
-int nxp_wifi_internal_tx(const struct device *dev, struct net_pkt *pkt)
+int nxp_wifi_internal_tx(const struct device *dev, struct net_pkt *pkt, bool pkt_fwd)
 {
     int ret;
     interface_t *if_handle = (interface_t *)dev->data;
@@ -579,13 +591,11 @@ int nxp_wifi_internal_tx(const struct device *dev, struct net_pkt *pkt)
         }
         else
         {
-#if CONFIG_WIFI_PKT_FWD
-            if (interface == WLAN_BSS_TYPE_UAP)
+            if (pkt_fwd)
             {
                 retry = MAX_RETRY_PKT_FWD;
             }
             else
-#endif
             {
                 retry = retry_attempts;
             }
@@ -594,12 +604,9 @@ int nxp_wifi_internal_tx(const struct device *dev, struct net_pkt *pkt)
         wmm_outbuf = wifi_wmm_get_outbuf_enh(&outbuf_len, (mlan_wmm_ac_e)pkt_prio, interface, ra, &is_tx_pause);
         ret        = (wmm_outbuf == NULL) ? true : false;
 
-        /* uAP case doesn't need to delay to let powersave task run,
-         * as FW won't go into sleep mode when uAP enabled. And this
-         * delay will block uAP packet forward case */
-#if CONFIG_WIFI_PKT_FWD
-        if (interface != WLAN_BSS_TYPE_UAP)
-#endif
+        /* In packet forward case, this function is called by RX thread,
+         * so the time delay is not allowed */
+        if (!pkt_fwd)
         {
             if (ret == true && is_tx_pause == true)
             {
@@ -688,9 +695,9 @@ int nxp_wifi_internal_tx(const struct device *dev, struct net_pkt *pkt)
 int net_wifi_packet_send(uint8_t interface, void *stack_buffer)
 {
     if (interface == WLAN_BSS_TYPE_UAP)
-        return nxp_wifi_internal_tx(net_if_get_device((void *)g_uap.netif), (struct net_pkt *)stack_buffer);
+        return nxp_wifi_internal_tx(net_if_get_device((void *)g_uap.netif), (struct net_pkt *)stack_buffer, 1);
     else
-        return nxp_wifi_internal_tx(net_if_get_device((void *)g_mlan.netif), (struct net_pkt *)stack_buffer);
+        return nxp_wifi_internal_tx(net_if_get_device((void *)g_mlan.netif), (struct net_pkt *)stack_buffer, 1);
 }
 #endif
 
@@ -1059,7 +1066,7 @@ static void ipv6_mcast_delete(struct net_mgmt_event_callback *cb, struct net_if 
 }
 #endif
 
-static void wifi_net_event_handler(struct net_mgmt_event_callback *cb, uint32_t mgmt_event, struct net_if *iface)
+static void wifi_net_event_handler(struct net_mgmt_event_callback *cb, uint64_t mgmt_event, struct net_if *iface)
 {
     // const struct wifi_status *status = (const struct wifi_status *)cb->info;
     enum wifi_event_reason wifi_event_reason;

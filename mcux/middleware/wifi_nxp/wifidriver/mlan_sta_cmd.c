@@ -112,9 +112,18 @@ static mlan_status wlan_cmd_mfg_tx_frame(pmlan_private pmpriv, HostCmd_DS_COMMAN
         mcmd->short_preamble    = wlan_cpu_to_le32(cfg->short_preamble);
         mcmd->act_sub_ch        = wlan_cpu_to_le32(cfg->act_sub_ch);
         mcmd->short_gi          = wlan_cpu_to_le32(cfg->short_gi);
+        mcmd->adv_coding         = wlan_le32_to_cpu(cfg->adv_coding);
         mcmd->tx_bf             = wlan_cpu_to_le32(cfg->tx_bf);
         mcmd->gf_mode           = wlan_cpu_to_le32(cfg->gf_mode);
         mcmd->stbc              = wlan_cpu_to_le32(cfg->stbc);
+        mcmd->signal_bw         = wlan_cpu_to_le32(cfg->signal_bw);
+        mcmd->NumPkt            = wlan_cpu_to_le32(cfg->NumPkt);
+        mcmd->MaxPE             = wlan_cpu_to_le32(cfg->MaxPE);
+        mcmd->BeamChange        = wlan_cpu_to_le32(cfg->BeamChange);
+        mcmd->Dcm               = wlan_cpu_to_le32(cfg->Dcm);
+        mcmd->Doppler           = wlan_cpu_to_le32(cfg->Doppler);
+        mcmd->MidP              = wlan_cpu_to_le32(cfg->MidP);
+        mcmd->QNum              = wlan_cpu_to_le32(cfg->QNum);
         (void)__memcpy(pmpriv->adapter, mcmd->bssid, cfg->bssid, MLAN_MAC_ADDR_LENGTH);
     }
 
@@ -1702,8 +1711,8 @@ int wlan_parse_getdata(HostCmd_DS_COMMAND *resp, mlan_ds_subscribe_evt *sub_evt)
     sub_evt->link_snr_freq         = wlan_le16_to_cpu(link_quality->link_snr_freq);
     sub_evt->link_rate             = wlan_le16_to_cpu(link_quality->link_rate);
     sub_evt->link_rate_freq        = wlan_le16_to_cpu(link_quality->link_rate_freq);
-    sub_evt->link_tx_latency       = wlan_le16_to_cpu(link_quality->link_tx_latency);
-    sub_evt->link_tx_lantency_freq = wlan_le16_to_cpu(link_quality->link_tx_lantency_freq);
+    sub_evt->link_tx_latency       = wlan_le32_to_cpu(link_quality->link_tx_latency);
+    sub_evt->link_tx_lantency_freq = wlan_le32_to_cpu(link_quality->link_tx_lantency_freq);
     tlv += link_quality->header.len + tyhdsize;
 
     /*pre beacon lost*/
@@ -1884,8 +1893,8 @@ mlan_status wlan_cmd_subscribe_event(IN pmlan_private pmpriv,
         link_quality->link_snr_freq         = wlan_cpu_to_le16(sub_evt->link_snr_freq);
         link_quality->link_rate             = wlan_cpu_to_le16(sub_evt->link_rate);
         link_quality->link_rate_freq        = wlan_cpu_to_le16(sub_evt->link_rate_freq);
-        link_quality->link_tx_latency       = wlan_cpu_to_le16(sub_evt->link_tx_latency);
-        link_quality->link_tx_lantency_freq = wlan_cpu_to_le16(sub_evt->link_tx_lantency_freq);
+        link_quality->link_tx_latency       = wlan_cpu_to_le32(sub_evt->link_tx_latency);
+        link_quality->link_tx_lantency_freq = wlan_cpu_to_le32(sub_evt->link_tx_lantency_freq);
         tlv += sizeof(MrvlIEtypes_LinkQualityThreshold_t);
         cmd_size += sizeof(MrvlIEtypes_LinkQualityThreshold_t);
     }
@@ -2031,6 +2040,37 @@ static mlan_status wlan_cmd_csi(pmlan_private pmpriv, HostCmd_DS_COMMAND *cmd, t
             break;
     }
     cmd->size = wlan_cpu_to_le16(cmd->size);
+    LEAVE();
+    return MLAN_STATUS_SUCCESS;
+}
+#endif
+
+#if CONFIG_WIFI_CHANNEL_LOAD
+/**
+ *  @brief This function sends channel load command to firmware.
+ *
+ *  @param pmpriv       A pointer to mlan_private structure
+ *  @param cmd          Hostcmd ID
+ *  @param cmd_action   Command action
+ *  @param pdata_buf    A void pointer to information buffer
+ *  @return             N/A
+ */
+mlan_status wlan_cmd_get_channel_load(pmlan_private pmpriv, HostCmd_DS_COMMAND *cmd, t_u16 cmd_action, t_void *pdata_buf)
+{
+    HostCmd_DS_802_11_GET_CH_LOAD *cfg_cmd = (HostCmd_DS_802_11_GET_CH_LOAD *)&cmd->params.channel_load;
+    wifi_802_11_chan_load_t *cfg              = (wifi_802_11_chan_load_t *)pdata_buf;
+
+    ENTER();
+
+    cmd->command    = wlan_cpu_to_le16(HostCmd_CMD_802_11_GET_CH_LOAD);
+    cmd->size       = wlan_cpu_to_le16(sizeof(HostCmd_DS_802_11_GET_CH_LOAD) + S_DS_GEN);
+    cfg_cmd->action = wlan_cpu_to_le16(cmd_action);
+
+    if (cmd_action == HostCmd_ACT_GEN_GET)
+    {
+        cfg_cmd->duration = (t_u16)cfg->duration;
+    }
+
     LEAVE();
     return MLAN_STATUS_SUCCESS;
 }
@@ -2298,6 +2338,11 @@ mlan_status wlan_ops_sta_prepare_cmd(IN t_void *priv,
 #if (CONFIG_WIFI_IND_RESET) && (CONFIG_WIFI_IND_DNLD)
         case HostCmd_CMD_INDEPENDENT_RESET_CFG:
             ret = wlan_cmd_ind_rst_cfg(cmd_ptr, cmd_action, pdata_buf);
+            break;
+#endif
+#if CONFIG_WIFI_CHANNEL_LOAD
+        case HostCmd_CMD_802_11_GET_CH_LOAD:
+            ret = wlan_cmd_get_channel_load(pmpriv, cmd_ptr, cmd_action, pdata_buf);
             break;
 #endif
         case HostCmd_CMD_802_11_TX_FRAME:

@@ -122,8 +122,20 @@ extern "C" {
 #define CONFIG_WIFI_RESET 1
 #endif
 
+#if CONFIG_NXP_WIFI_IND_DNLD
+#define CONFIG_WIFI_IND_DNLD 1
+#endif
+
+#if CONFIG_NXP_WIFI_IND_RESET
+#define CONFIG_WIFI_IND_RESET 1
+#endif
+
 #if CONFIG_NXP_WIFI_NET_MONITOR
 #define CONFIG_NET_MONITOR 1
+#endif
+
+#if CONFIG_NXP_WIFI_HOST_TXRX_MGMT_FRAME
+#define HOST_TXRX_MGMT_FRAME 1
 #endif
 
 #if CONFIG_NXP_WIFI_ECSA
@@ -251,7 +263,13 @@ extern "C" {
 #endif
 
 #if CONFIG_NXP_OVERRIDE_CALIBRATION_DATA
-#define OVERRIDE_CALIBRATION_DATA "wifi_cal_data_rw61x_override.h"
+#if defined(CONFIG_WLAN_CALDATA_2ANT_HI_ISO)
+#define OVERRIDE_CALIBRATION_DATA "wifi_cal_data_iw612_2ant_hi_iso.h"
+#elif defined(CONFIG_WLAN_CALDATA_2ANT_LO_ISO)
+#define OVERRIDE_CALIBRATION_DATA "wifi_cal_data_iw612_2ant_lo_iso.h"
+#else
+#define OVERRIDE_CALIBRATION_DATA "wifi_cal_data_override.h"
+#endif
 #endif
 
 #if !CONFIG_NXP_OVERRIDE_CALIBRATION_DATA
@@ -335,20 +353,15 @@ extern "C" {
 #define CONFIG_FIPS 1
 #endif
 
-#if !defined CONFIG_DRIVER_OWE
-#define CONFIG_DRIVER_OWE 0
+#if CONFIG_NXP_WIFI_OWE
+#define CONFIG_DRIVER_OWE 1
 #endif
 
-#if CONFIG_DRIVER_OWE
-#undef CONFIG_DRIVER_OWE
-#define CONFIG_DRIVER_OWE CONFIG_WPA_SUPP
-#endif
-
-#if CONFIG_DRIVER_OWE
+#if (CONFIG_NXP_WIFI_OWE && CONFIG_WIFI_NM_WPA_SUPPLICANT)
 #define CONFIG_OWE
 #endif
 
-#if !CONFIG_DRIVER_OWE
+#if (!CONFIG_NXP_WIFI_OWE && CONFIG_WIFI_NM_WPA_SUPPLICANT)
 #undef CONFIG_OWE
 #endif
 
@@ -518,6 +531,10 @@ extern "C" {
 
 #if CONFIG_NXP_WIFI_FORCE_RTS
 #define CONFIG_WIFI_FORCE_RTS 1
+#endif
+
+#if CONFIG_NXP_WIFI_CHANNEL_LOAD
+#define CONFIG_WIFI_CHANNEL_LOAD 1
 #endif
 
 #if CONFIG_NXP_WIFI_TX_AMPDU_PROT_MODE

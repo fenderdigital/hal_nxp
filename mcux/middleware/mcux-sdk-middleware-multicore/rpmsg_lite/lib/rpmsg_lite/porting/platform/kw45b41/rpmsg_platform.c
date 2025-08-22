@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2024 NXP
+ * Copyright 2020-2025 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -25,12 +25,16 @@
 
 #define APP_MU_IRQ_PRIORITY (3U)
 
+#define RL_PLATFORM_SHMEM_CFG_IDENTIFIER_LENGTH (12U)
+
 #if defined(IMU_CPU_INDEX) && (IMU_CPU_INDEX == 1U)
 #define APP_MU_IRQn  RF_IMU0_IRQn
 #define APP_IMU_LINK kIMU_LinkCpu1Cpu2
+#define RPMSG_BUILD_FOR_CORE_0
 #elif defined(IMU_CPU_INDEX) && (IMU_CPU_INDEX == 2U)
 #define APP_MU_IRQn  CPU2_MSG_RDY_INT_IRQn
 #define APP_IMU_LINK kIMU_LinkCpu2Cpu1
+#define RPMSG_BUILD_FOR_CORE_1
 #endif
 
 /* Generator for CRC calculations. */
@@ -46,12 +50,12 @@ static LOCK_STATIC_CONTEXT platform_lock_static_ctxt;
 /* This structure is used to validate that shmem config that is stored in SMU2 is valid */
 typedef struct rpmsg_platform_shmem_config_protected
 {
-    uint8_t identificationWord[10];
+    uint8_t identificationWord[RL_PLATFORM_SHMEM_CFG_IDENTIFIER_LENGTH];
     rpmsg_platform_shmem_config_t config;
     uint16_t shmemConfigCrc;
 } rpmsg_platform_shmem_config_protected_t;
 
-static const uint8_t ShmemConfigIdentifier[12] = {"SMEM_CONFIG:"};
+static const uint8_t ShmemConfigIdentifier[RL_PLATFORM_SHMEM_CFG_IDENTIFIER_LENGTH] = {"SMEM_CONFIG:"};
 
 /* Compute CRC to protect shared memory strcuture stored in RAM by application core and retrieve by NBU */
 static uint16_t platform_compute_crc_over_shmem_struct(rpmsg_platform_shmem_config_protected_t *protected_structure);
@@ -60,8 +64,12 @@ static uint32_t first_time                        = RL_TRUE;
 static rpmsg_platform_shmem_config_t shmem_config = {0U};
 
 #if defined(RL_USE_MCMGR_IPC_ISR_HANDLER) && (RL_USE_MCMGR_IPC_ISR_HANDLER == 1)
-static void mcmgr_event_handler(uint16_t vring_idx, void *context)
+static void mcmgr_event_handler(mcmgr_core_t coreNum, uint16_t vring_idx, void *context)
 {
+    /* Unused */
+    (void)context;
+    (void)coreNum;
+
     env_isr((uint32_t)vring_idx);
 }
 #else
@@ -157,7 +165,11 @@ void platform_notify(uint32_t vector_id)
 {
     env_lock_mutex(platform_lock);
 #if defined(RL_USE_MCMGR_IPC_ISR_HANDLER) && (RL_USE_MCMGR_IPC_ISR_HANDLER == 1)
-    (void)MCMGR_TriggerEvent(kMCMGR_RemoteRPMsgEvent, (uint16_t)RL_GET_Q_ID(vector_id));
+#if defined(RPMSG_BUILD_FOR_CORE_0)
+    (void)MCMGR_TriggerEvent(kMCMGR_Core1, kMCMGR_RemoteRPMsgEvent, (uint16_t)RL_GET_Q_ID(vector_id));
+#else
+    (void)MCMGR_TriggerEvent(kMCMGR_Core0, kMCMGR_RemoteRPMsgEvent, (uint16_t)RL_GET_Q_ID(vector_id));
+#endif
 #else
     /* TO Not support*/
 #endif
@@ -227,7 +239,7 @@ int32_t platform_interrupt_enable(uint32_t vector_id)
         NVIC_EnableIRQ(APP_MU_IRQn);
     }
     platform_global_isr_enable();
-    return ((int32_t)vector_id);
+    return 0;
 }
 
 /**
@@ -253,7 +265,7 @@ int32_t platform_interrupt_disable(uint32_t vector_id)
     }
     disable_counter++;
     platform_global_isr_enable();
-    return ((int32_t)vector_id);
+    return 0;
 }
 
 /**
@@ -283,6 +295,26 @@ void platform_cache_all_flush_invalidate(void)
  *
  */
 void platform_cache_disable(void)
+{
+}
+
+/**
+ * platform_cache_flush
+ *
+ * Empty implementation
+ *
+ */
+void platform_cache_flush(void *data, uint32_t len)
+{
+}
+
+/**
+ * platform_cache_invalidate
+ *
+ * Empty implementation
+ *
+ */
+void platform_cache_invalidate(void *data, uint32_t len)
 {
 }
 
@@ -341,7 +373,7 @@ void platform_set_static_shmem_config(void)
     rpmsg_platform_shmem_config_protected_t protec_shmem_struct;
 
     /* Identifier at the beginning of the structure that will be used to verify on nbu side validity of the structure */
-    memcpy(&(protec_shmem_struct.identificationWord), ShmemConfigIdentifier, sizeof(ShmemConfigIdentifier));
+    memcpy(&(protec_shmem_struct.identificationWord), ShmemConfigIdentifier, RL_PLATFORM_SHMEM_CFG_IDENTIFIER_LENGTH);
 
     /* Fill shared memory structure with setting from the app core */
     protec_shmem_struct.config.buffer_payload_size = RL_BUFFER_PAYLOAD_SIZE;
@@ -380,8 +412,8 @@ uint32_t platform_get_custom_shmem_config(uint32_t link_id, rpmsg_platform_shmem
         shmem_config.vring_size          = 0x80U;
         shmem_config.vring_align         = 0x10U;
 
-        if (memcmp(&(protec_shmem_struct.identificationWord), ShmemConfigIdentifier, sizeof(ShmemConfigIdentifier)) !=
-            0U)
+        if (memcmp(&(protec_shmem_struct.identificationWord), ShmemConfigIdentifier, RL_PLATFORM_SHMEM_CFG_IDENTIFIER_LENGTH) !=
+            0)
         {
             break;
         }
@@ -409,8 +441,8 @@ static uint16_t platform_compute_crc_over_shmem_struct(rpmsg_platform_shmem_conf
     uint8_t byte = 0U;
 
     uint8_t *ptr = (uint8_t *)(&protec_shmem_struct->config);
-    uint16_t len = (uint16_t)((uint32_t)(uint8_t *)(&protec_shmem_struct->shmemConfigCrc) -
-                              (uint32_t)(uint8_t *)(&protec_shmem_struct->config));
+    uint32_t len = ((uint32_t)(uint8_t *)(&protec_shmem_struct->shmemConfigCrc) -
+                    (uint32_t)(uint8_t *)(&protec_shmem_struct->config));
     while (len != 0U)
     {
         byte = *ptr;

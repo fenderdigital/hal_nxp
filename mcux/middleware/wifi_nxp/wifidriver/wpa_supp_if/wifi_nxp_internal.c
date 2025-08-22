@@ -156,6 +156,12 @@ void wifi_process_mgmt_tx_status(struct wifi_message *msg)
             }
         }
     }
+    else
+    {
+#if CONFIG_ROAMING
+        wlan_subscribe_rssi_low_event();
+#endif
+    }
 }
 
 int wifi_setup_ht_cap(t_u16 *ht_capab, t_u8 *pmcs_set, t_u8 *a_mpdu_params, t_u8 band)
@@ -341,7 +347,7 @@ int wifi_setup_vht_cap(t_u32 *vht_capab, t_u8 *vht_mcs_set, t_u8 band)
     *vht_capab = pmadapter->usr_dot_11ac_dev_cap_a;
 
     *vht_capab &= ~DEFALUT_11AC_CAP_BEAMFORMING_RESET_MASK;
-#ifdef RW610
+#if defined(RW610) || defined(IW610)
     *vht_capab &= ~DEFALUT_11AC_CAP_SHORTGI_80MHZ_RESET_MASK;
 #endif
 

@@ -532,7 +532,7 @@ typedef enum _WLAN_802_11_WEP_STATUS
 #if defined(SD8978) || defined(SD8987) || defined(SD8997) || defined(SD9097) || defined(SD9098) || defined(SD9177)
 #define DEFAULT_11N_CAP_MASK_BG \
     (HWSPEC_SHORTGI20_SUPP | HWSPEC_RXSTBC_SUPP | HWSPEC_SHORTGI40_SUPP | HWSPEC_CHANBW40_SUPP | HWSPEC_LDPC_SUPP)
-#elif defined(SD8801) || defined(RW610)
+#elif defined(SD8801) || defined(RW610) || defined(IW610)
 #define DEFAULT_11N_CAP_MASK_BG (HWSPEC_SHORTGI20_SUPP | HWSPEC_RXSTBC_SUPP | HWSPEC_LDPC_SUPP)
 #endif
 /** Default 11n capability mask for 5GHz */
@@ -743,7 +743,7 @@ typedef enum _WLAN_802_11_WEP_STATUS
 #if defined(SD8987)
 #define FW_CAPINFO_EXT_CMD_TX_DATA          MBIT(29)
 #define IS_FW_SUPPORT_CMD_TX_DATA(_adapter) (_adapter->fw_cap_info & FW_CAPINFO_EXT_CMD_TX_DATA)
-#elif defined(SD9177)
+#elif defined(SD9177) || defined(IW610)
 #define FW_CAPINFO_EXT_CMD_TX_DATA          MBIT(16)
 /** Check if transmit mgmt pkt through command supported by firmware */
 #define IS_FW_SUPPORT_CMD_TX_DATA(_adapter) (_adapter->fw_cap_ext & FW_CAPINFO_EXT_CMD_TX_DATA)
@@ -1371,6 +1371,10 @@ typedef MLAN_PACK_START struct _MrvlIEtypes_fw_cap_info_t
 #define HostCmd_CMD_CCK_DESENSE_CFG 0x0265
 #endif
 
+#ifdef CONFIG_WIFI_CHANNEL_LOAD
+#define HostCmd_CMD_802_11_GET_CH_LOAD 0x027b
+#endif
+
 /** Host Command ID: Tx Frame */
 #define HostCmd_CMD_802_11_TX_FRAME 0x0283
 
@@ -1392,6 +1396,8 @@ typedef enum _ENH_PS_MODES
 #define HostCmd_ACT_GEN_GET 0x0000U
 /** General purpose action : Set */
 #define HostCmd_ACT_GEN_SET 0x0001U
+/** General purpose action : Set Default */
+#define HostCmd_ACT_GEN_SET_DEFAULT 0x0002U
 /** Special purpose action : Set */
 #define HostCmd_ACT_SPC_SET 0x8001
 
@@ -1742,7 +1748,7 @@ typedef enum _ENH_PS_MODES
 /** Event definition: RXBA_SYNC */
 #define EVENT_RXBA_SYNC 0x00000059
 
-#ifdef SD9177
+#if defined(SD9177) || defined(IW610)
 #define EVENT_IMD3_CAL_START 0x000000A0
 #define EVENT_IMD3_CAL_END   0x000000A1
 #endif
@@ -1825,6 +1831,10 @@ typedef enum _ENH_PS_MODES
 #define EVENT_ASSOC_REQ_IE 0x00000095
 
 #define EVENT_ACCESS_BY_HOST 0x00000098
+
+#if CONFIG_WIFI_CHANNEL_LOAD
+#define EVENT_CHAN_LOAD 0x00000099
+#endif
 
 /** Event ID mask */
 #define EVENT_ID_MASK 0xffff
@@ -3463,8 +3473,13 @@ typedef MLAN_PACK_START struct _HostCmd_DS_GET_HW_SPEC
     t_u32 fw_release_number;
     /** hw dev cap */
     t_u32 hw_dev_cap;
-    /** Reserved field */
-    t_u32 reserved_2;
+    /** Board type or Reserved field */
+#if defined(IW610)
+    t_u8 board_type;
+    t_u8 reserved_2[3];
+#else
+     t_u32 reserved_2;
+#endif
     /** Reserved field */
     t_u32 reserved_3;
     /** FW/HW Capability */
@@ -4892,6 +4907,26 @@ typedef MLAN_PACK_START struct _hostcmd_twt_information
     /** TWT information state from FW. */
     t_u8 information_state;
 } MLAN_PACK_END hostcmd_twt_information, *phostcmd_twt_information;
+
+#define BTWT_AGREEMENT_MAX 5
+typedef PACK_START struct
+{
+    t_u8 btwt_id;
+    t_u16 bcast_mantissa;
+    t_u8 bcast_exponent;
+    t_u8 nominal_wake;
+} PACK_END hostcmd_btwt_set_t;
+/** BTWT AP Config parameters */
+
+typedef MLAN_PACK_START struct
+{
+    t_u8 bcast_bet_sta_wait;
+    t_u16 bcast_offset;
+    t_u8 bcast_twtli;
+    t_u8 count;
+    hostcmd_btwt_set_t btwt_sets[BTWT_AGREEMENT_MAX];
+} MLAN_PACK_END hostcmd_btwt_cfg, *phostcmd_btwt_cfg;
+
 /** HostCmd_DS_TWT_CFG */
 typedef MLAN_PACK_START struct _HostCmd_DS_TWT_CFG
 {
@@ -4910,6 +4945,8 @@ typedef MLAN_PACK_START struct _HostCmd_DS_TWT_CFG
         hostcmd_twt_report twt_report;
         /** TWT report for Sub ID: MLAN_11AX_TWT_INFORMATION_SUBID */
         hostcmd_twt_information twt_information;
+        /** TWT report for Sub ID: MLAN_11AX_TWT_BTWT_SUBID */
+        hostcmd_btwt_cfg btwt_cfg;
     } param;
 } MLAN_PACK_END HostCmd_DS_TWT_CFG;
 #endif /* CONFIG_11AX_TWT */
@@ -6687,7 +6724,23 @@ typedef MLAN_PACK_START struct _HostCmd_DS_MFG_CMD_TX_FRAME2
     /** STBC */
     t_u32 stbc;
     /** power id */
-    t_u32 rsvd[2];
+    t_u32 rsvd[1];
+    /**signal bw*/
+    t_u32 signal_bw;
+    /** NumPkt */
+    t_u32 NumPkt;
+    /** MaxPE */
+    t_u32 MaxPE;
+    /** BeamChange */
+    t_u32 BeamChange;
+    /** Dcm */
+    t_u32 Dcm;
+    /** Doppler */
+    t_u32 Doppler;
+    /** MidP */
+    t_u32 MidP;
+    /** QNum */
+    t_u32 QNum;
 } MLAN_PACK_END HostCmd_DS_MFG_CMD_TX_FRAME2;
 
 typedef MLAN_PACK_START struct _HostCmd_DS_MFG_CMD_TX_CONT
@@ -7220,9 +7273,9 @@ typedef MLAN_PACK_START struct
     /* Second minimum rate frequency */
     t_u16 link_rate_freq;
     /* Tx latency value (us) */
-    t_u16 link_tx_latency;
+    t_u32 link_tx_latency;
     /* Tx latency frequency */
-    t_u16 link_tx_lantency_freq;
+    t_u32 link_tx_lantency_freq;
 } MLAN_PACK_END MrvlIEtypes_LinkQualityThreshold_t;
 
 /** Supported operating classes element */
@@ -7775,6 +7828,32 @@ typedef MLAN_PACK_START struct _HostCmd_IMD3_CFG
 } MLAN_PACK_END HostCmd_IMD3_CFG;
 #endif
 
+#if CONFIG_WIFI_CHANNEL_LOAD
+typedef MLAN_PACK_START struct _HostCmd_DS_802_11_GET_CH_LOAD
+{
+    t_u16 action;
+    t_u16 ch_load;
+    t_s16 noise;
+    t_u16 rx_quality;
+    t_u16 duration;
+    t_u16 cca_th; /* not using cca_th in v18 */
+} MLAN_PACK_END HostCmd_DS_802_11_GET_CH_LOAD;
+
+typedef MLAN_PACK_START struct _CH_LOAD_EVENT_HEADER_t
+{
+    /** No of bytes in packet including this field */
+    t_u16 length;
+    /** Type: Event (3) */
+    t_u16 type;
+    /** Event ID */
+    t_u16 event_id;
+    /** BSS index number for multiple BSS support */
+    t_u8 bss_index;
+    /** BSS type */
+    t_u8 bss_type;
+} MLAN_PACK_END ch_load_event_t;
+#endif
+
 /** HostCmd_DS_80211_TX_FRAME */
 typedef MLAN_PACK_START struct _HostCmd_DS_80211_TX_FRAME
 {
@@ -8116,6 +8195,9 @@ typedef MLAN_PACK_START struct _HostCmd_DS_COMMAND
 #if CONFIG_IMD3_CFG
         HostCmd_IMD3_CFG imd3_cfg;
 #endif
+#if CONFIG_WIFI_CHANNEL_LOAD
+        HostCmd_DS_802_11_GET_CH_LOAD  channel_load;
+#endif
         HostCmd_DS_80211_TX_FRAME tx_frame;
     } params;
 } MLAN_PACK_END HostCmd_DS_COMMAND;
@@ -8154,7 +8236,7 @@ typedef MLAN_PACK_START struct _opt_sleep_confirm_buffer
 #define VDLL_IND_TYPE_ERR_SIG 2
 /** notify vdll download error: ID error */
 #define VDLL_IND_TYPE_ERR_ID 3
-#if defined(SD9177)
+#if defined(SD9177) || defined(IW610)
 /** notify vdll download error: Secure error */
 #define VDLL_IND_TYPE_ERR_SECURE 4
 /** notify vdll download vdll complete */

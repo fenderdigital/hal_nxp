@@ -40,8 +40,9 @@
 #define MBEDTLS_CIPHER_AES_ENABLED
 #define MBEDTLS_CIPHER_MODE_CBC_ENABLED
 #define MBEDTLS_CIPHER_PADDING_PKCS7
+#if defined(CONFIG_MCUX_ELS_PKC)
 #define PSA_CRYPTO_DRIVER_ELS_PKC
-
+#endif
 #define PSA_WANT_ALG_ECDSA 1
 #define PSA_WANT_ALG_ECDSA_ANY 1
 #define PSA_WANT_ALG_RSA_PKCS1V15_SIGN 1
@@ -3741,8 +3742,6 @@
 #define MBEDTLS_CIPHER_AES_ENABLED
 #define MBEDTLS_CIPHER_MODE_CBC_ENABLED
 #define MBEDTLS_CIPHER_PADDING_PKCS7
-
-#define PSA_CRYPTO_DRIVER_ELS_PKC
 //#define PSA_CRYPTO_DRIVER_THREAD_ALT
 
 //#define MBEDTLS_THREADING_C
@@ -3758,6 +3757,7 @@
  * CBC-MAC is not yet supported via the PSA API in Mbed TLS.
  */
 //#define PSA_WANT_ALG_CBC_MAC                    1
+#define PSA_WANT_ALG_JPAKE                      1
 #define PSA_WANT_ALG_CBC_NO_PADDING             1
 #define PSA_WANT_ALG_CBC_PKCS7                  1
 #define PSA_WANT_ALG_CCM                        1
@@ -3785,6 +3785,10 @@
 #define PSA_WANT_ALG_SHA_256                    1
 #define PSA_WANT_ALG_SHA_384                    1
 #define PSA_WANT_ALG_SHA_512                    1
+#define PSA_WANT_ALG_HKDF_EXTRACT               1
+#define PSA_WANT_ALG_HKDF_EXPAND                1
+#define MBEDTLS_PSA_BUILTIN_ALG_HKDF_EXTRACT    1
+#define MBEDTLS_PSA_BUILTIN_ALG_HKDF_EXPAND     1
 //#define PSA_WANT_ALG_STREAM_CIPHER              1
 #define PSA_WANT_ALG_TLS12_PRF                  1
 #define PSA_WANT_ALG_TLS12_PSK_TO_MS            1
@@ -3831,5 +3835,4 @@
 #define PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_IMPORT   1
 #define PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_EXPORT   1
 #define PSA_WANT_KEY_TYPE_RSA_KEY_PAIR_GENERATE 1
-
 #endif /* MBEDTLS_USER_CONFIG_H */
